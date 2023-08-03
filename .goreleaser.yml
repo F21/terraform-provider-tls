@@ -1,0 +1,54 @@
+version: 2
+archives:
+  - files:
+      # Ensure only built binary and license file are archived
+      - src: 'LICENSE'
+        dst: 'LICENSE.txt'
+    format: zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+before:
+  hooks:
+    - 'go mod download'
+builds:
+  - # Binary naming only required for Terraform CLI 0.12
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos:
+      - linux
+    goarch:
+      - amd64
+    ldflags:
+      - '-s -w -X main.Version={{.Version}} -X main.commit={{.Commit}}'
+    mod_timestamp: '{{ .CommitTimestamp }}'
+checksum:
+  algorithm: sha256
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+release:
+  github:
+    owner: F21
+    name: terraform-provider-tls
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+signs:
+  - artifacts: checksum
+    args:
+      # if you are using this in a GitHub action or some other automated pipeline, you
+      # need to pass the batch flag to indicate its not interactive.
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}" # set this environment variable for your signing key
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+changelog:
+  disable: true
+
+project_name: terraform-provider-tls

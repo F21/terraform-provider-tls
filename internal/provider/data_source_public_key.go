@@ -69,6 +69,10 @@ func (d *publicKeyDataSource) Schema(ctx context.Context, req datasource.SchemaR
 				Description: "The name of the algorithm used by the given private key. " +
 					fmt.Sprintf("Possible values are: `%s`. ", strings.Join(supportedAlgorithmsStr(), "`, `")),
 			},
+			"openssh_comment": schema.StringAttribute{
+				Computed:    true,
+				Description: "The OpenSSH comment.",
+			},
 			"public_key_pem": schema.StringAttribute{
 				Computed: true,
 				Description: "The public key, in [PEM (RFC 1421)](https://datatracker.ietf.org/doc/html/rfc1421) format. " +
@@ -120,16 +124,18 @@ func (ds *publicKeyDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	var prvKey crypto.PrivateKey
 	var algorithm Algorithm
 	var err error
+	var openSSHComment string
 
 	// Given the use of `ExactlyOneOf` in the Schema, we are guaranteed
 	// that either `private_key_pem` or `private_key_openssh` will be set.
 	var prvKeyArg types.String
+
 	if req.Config.GetAttribute(ctx, path.Root("private_key_pem"), &prvKeyArg); !prvKeyArg.IsNull() && !prvKeyArg.IsUnknown() {
 		tflog.Debug(ctx, "Parsing private key from PEM")
 		prvKey, algorithm, err = parsePrivateKeyPEM([]byte(prvKeyArg.ValueString()))
 	} else if req.Config.GetAttribute(ctx, path.Root("private_key_openssh"), &prvKeyArg); !prvKeyArg.IsNull() && !prvKeyArg.IsUnknown() {
 		tflog.Debug(ctx, "Parsing private key from OpenSSH PEM")
-		prvKey, algorithm, err = parsePrivateKeyOpenSSHPEM([]byte(prvKeyArg.ValueString()))
+		prvKey, algorithm, openSSHComment, err = parsePrivateKeyOpenSSHPEM([]byte(prvKeyArg.ValueString()))
 	}
 	if err != nil {
 		res.Diagnostics.AddError("Unable to parse private key", err.Error())
@@ -143,5 +149,5 @@ func (ds *publicKeyDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	}
 
 	tflog.Debug(ctx, "Storing private key's public key info into the state")
-	res.Diagnostics.Append(setPublicKeyAttributes(ctx, &res.State, prvKey)...)
+	res.Diagnostics.Append(setPublicKeyAttributes(ctx, &res.State, prvKey, openSSHComment)...)
 }
